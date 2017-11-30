@@ -1,0 +1,7 @@
+Name: mikey
+Log:
+  Level: info
+Ports:
+  - 21
+  - 8080
+  - 9999
