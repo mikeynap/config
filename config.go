@@ -28,23 +28,8 @@ func contains(s []string, str string) bool {
 	return false
 }
 
-func NewWithCommand(cmd *cobra.Command, cfg interface{}) (*Config, error) {
-	c := &Config{
-		Viper: viper.New(),
-		Cmd:   cmd,
-		cfg:   cfg,
-	}
-	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
-		return CheckRequiredFlags(cmd.Flags())
-	}
-
-	c.Cmd.PersistentFlags().String("config", "", "The configuration file")
-	c.Viper.BindPFlag("config", c.Cmd.PersistentFlags().Lookup("config"))
-
-	return c, c.setupEnvAndFlags(c.cfg)
-
-}
-
+// New creates a config parser using a provided cfg struct.
+// name, desc are for the help window.
 func New(name string, desc string, cfg interface{}) (*Config, error) {
 	return NewWithCommand(
 		&cobra.Command{
@@ -54,7 +39,25 @@ func New(name string, desc string, cfg interface{}) (*Config, error) {
 		}, cfg)
 }
 
-// Getconfig loads the config file
+// NewWithCommand creates the config parser using an existing cobra command.
+func NewWithCommand(cmd *cobra.Command, cfg interface{}) (*Config, error) {
+	c := &Config{
+		Viper: viper.New(),
+		Cmd:   cmd,
+		cfg:   cfg,
+	}
+	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		return checkRequiredFlags(cmd.Flags())
+	}
+
+	c.Cmd.PersistentFlags().String("config", "", "The configuration file")
+	c.Viper.BindPFlag("config", c.Cmd.PersistentFlags().Lookup("config"))
+
+	return c, c.setupEnvAndFlags(c.cfg)
+
+}
+
+// Execute runs the command (if provided) and populates the config struct.
 func (c *Config) Execute() (interface{}, error) {
 	c.Cmd.Flags().Visit(func(arg0 *pflag.Flag) {
 		if arg0.Name == "help" {
@@ -313,7 +316,7 @@ func splitCamel(s string, sep byte) string {
 	return string(r)
 }
 
-func CheckRequiredFlags(flags *pflag.FlagSet) error {
+func checkRequiredFlags(flags *pflag.FlagSet) error {
 	requiredError := false
 	flagName := ""
 
