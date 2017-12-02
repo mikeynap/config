@@ -123,47 +123,30 @@ func (c *Config) getCfg(gCfg interface{}) error {
 		} else if c.Viper.Get(flagStr) != nil {
 			str = flagStr
 		}
-		var v string
+		var v, ogV string
 		lup := c.Cmd.PersistentFlags().Lookup(strings.ToLower(str))
 		if lup != nil {
 			v = lup.Value.String()
+			ogV = v
 		}
+		subFieldAsString := fmt.Sprintf("%v", subField)
 
 		// If the struct has a value filled in that wasn't provided
 		// as a flag, then set it as the flag value.
 		// This allows the required check to pass.
-
 		if subField.Type().Kind() != reflect.Bool && lup != nil {
 			if !isZero(subField) && isZeroStr(v) {
-				v = fmt.Sprintf("%v", subField)
+				v = subFieldAsString
 				lup.Value.Set(v)
-				fmt.Printf("%+v\n", c.cfg)
-				fmt.Printf("subField: %+v\n", subField)
-				fmt.Printf("lup: %+v\n", lup)
-				fmt.Printf("v: %+v\n", v)
-				v2, _ := c.Cmd.PersistentFlags().GetInt(strings.ToLower(str))
-				fmt.Printf("v2: %+v\n", v2)
-				fmt.Println()
-				fmt.Println()
-
-			}
-
-			// AHHHHHHHHHHHHHH. This line next line took forever.
-			// Don't "reset" the default value if it's been specified differently.
-			if lup.DefValue == v && isZeroStr(v) && !isZero(subField) {
-				fmt.Printf("%+v\n", c.cfg)
-				fmt.Printf("subField: %+v\n", subField)
-				fmt.Printf("lup: %+v\n", lup)
-				fmt.Printf("v: %+v\n", v)
-				v2, _ := c.Cmd.PersistentFlags().GetInt(strings.ToLower(str))
-				fmt.Printf("v2: %+v\n", v2)
-				fmt.Println()
-				fmt.Println()
-				return nil
 			}
 		}
 
-		// asdf
+		// AHHHHHHHHHHHHHH. This line next line took forever.
+		// Don't "reset" the default value if it's been specified differently.
+		if lup != nil && lup.DefValue == ogV && ogV != "" && !isZeroStr(subFieldAsString) {
+			return nil
+		}
+
 		if len(str) != 0 && subField.CanSet() {
 			switch subField.Type().Kind() {
 			case reflect.Bool:
@@ -182,20 +165,6 @@ func (c *Config) getCfg(gCfg interface{}) error {
 				}
 				subField.SetInt(v)
 			case reflect.String:
-				// If the struct has a value filled in that wasn't provided
-				// as a flag, then set it as the flag value.
-				// This allows the required check to pass.
-				if lup != nil && subField.String() != "" && v == "" {
-					lup.Value.Set(subField.String())
-					return nil
-				}
-
-				// AHHHHHHHHHHHHHH. This line next line took forever.
-				// Don't "reset" the default value if it's been specified differently.
-				if lup != nil && lup.DefValue == v && v != "" && subField.String() != "" {
-					return nil
-				}
-
 				v = c.Viper.GetString(str)
 				if len(v) == 0 {
 					return nil
@@ -335,7 +304,6 @@ func (c *Config) checkRequiredFlags(flags *pflag.FlagSet) error {
 		val := c.Viper.Get(flag.Name)
 
 		if flagRequired && (!flag.Changed && isZero(val)) {
-			//fmt.Printf("%v %v %+v\n", val, flag.Name, c.cfg)
 			requiredError = true
 			flagName = flag.Name
 		}
