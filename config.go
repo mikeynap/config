@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -130,7 +131,6 @@ func (c *Config) getCfg(gCfg interface{}) error {
 			ogV = v
 		}
 		subFieldAsString := fmt.Sprintf("%v", subField)
-
 		// If the struct has a value filled in that wasn't provided
 		// as a flag, then set it as the flag value.
 		// This allows the required check to pass.
@@ -176,12 +176,18 @@ func (c *Config) getCfg(gCfg interface{}) error {
 					return nil
 				}
 				subField.SetFloat(v)
-			case reflect.Slice:
-				v := c.Viper.GetStringSlice(str)
-				if len(v) == 0 || len(v[0]) == 0 {
+			case reflect.Float32:
+				v := c.Viper.GetFloat64(str)
+				if v == 0 {
 					return nil
 				}
-				subField.Set(reflect.ValueOf(v))
+				subField.SetFloat(v)
+			case reflect.Slice:
+				v := c.Viper.GetStringSlice(str)
+				if len(v) == 0 || len(v[0]) == 0 || v[0] == "[]" {
+					return nil
+				}
+				subField.Set(reflect.Zero(reflect.TypeOf(v)))
 			default:
 				return fmt.Errorf("%s is unsupported by config @ %s.%s", subField.Type().String(), p, subFieldName)
 			}
@@ -230,6 +236,12 @@ func (c *Config) setupEnvAndFlags(gCfg interface{}) error {
 			c.Cmd.PersistentFlags().Int64(flagStr, def, desc)
 		case reflect.String:
 			c.Cmd.PersistentFlags().String(flagStr, _def, desc)
+		case reflect.Float32:
+			var def float64
+			if b, err := strconv.ParseFloat(_def, 32); err == nil {
+				def = b
+			}
+			c.Cmd.PersistentFlags().Float64(flagStr, def, desc)
 		case reflect.Float64:
 			var def float64
 			if b, err := strconv.ParseFloat(_def, 64); err == nil {
@@ -263,11 +275,11 @@ func (c *Config) setupEnvAndFlags(gCfg interface{}) error {
 func eachSubField(i interface{}, fn func(reflect.Value, string, []string) error, crumbs ...string) error {
 	t := reflect.ValueOf(i)
 	if t.Kind() != reflect.Ptr || t.Elem().Kind() != reflect.Struct {
-		panic("eachSubField can only be called on a pointer-to-struct")
+		return errors.New("eachSubField can only be called on a pointer-to-struct")
 	}
 	// Sanity check. Should be true if it is a pointer-to-struct
 	if !t.Elem().CanSet() {
-		panic("eachSubField can only be called on a settable struct of structs")
+		return errors.New("eachSubField can only be called on a settable struct of structs")
 	}
 
 	t = t.Elem()
@@ -302,7 +314,6 @@ func (c *Config) checkRequiredFlags(flags *pflag.FlagSet) error {
 
 		flagRequired := requiredAnnotation[0] == "true"
 		val := c.Viper.Get(flag.Name)
-
 		if flagRequired && (!flag.Changed && isZero(val)) {
 			requiredError = true
 			flagName = flag.Name

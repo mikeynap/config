@@ -78,6 +78,9 @@ func contains(s []string, str string) bool {
 }
 
 func isZero(x interface{}) bool {
+	if v := reflect.ValueOf(x); v.Kind() == reflect.Array || v.Kind() == reflect.Slice {
+		return v.Len() == 0
+	}
 	return reflect.DeepEqual(x, reflect.Zero(reflect.TypeOf(x)).Interface())
 }
 
