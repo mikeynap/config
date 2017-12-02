@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -18,10 +19,16 @@ type Config struct {
 	Cmd            *cobra.Command
 }
 
-//
-
-// New creates a config parser using a provided cfg struct.
-// name, desc are for the help window.
+/* New creates a config parser using a provided cfg struct.
+   name, desc are for the help window.
+   cfg can be decorated with the following tags:
+	 	- `required:"true"`: must be specified and non-zero.
+		   Most naturally used on strings, but can be used on numbers, but
+			 CANNOT be used if zero is a possible value. (Not supported for bools)
+		- `default:"val"`: if a value is not specified, replace with tag value.
+		  The same zero caviat as above applies here as well.
+		- `description:"this is the desc"`: description to use in help menu.
+*/
 func New(name string, desc string, cfg interface{}) *Config {
 	return NewWithCommand(
 		&cobra.Command{
@@ -116,6 +123,46 @@ func (c *Config) getCfg(gCfg interface{}) error {
 		} else if c.Viper.Get(flagStr) != nil {
 			str = flagStr
 		}
+		var v string
+		lup := c.Cmd.PersistentFlags().Lookup(strings.ToLower(str))
+		if lup != nil {
+			v = lup.Value.String()
+		}
+
+		// If the struct has a value filled in that wasn't provided
+		// as a flag, then set it as the flag value.
+		// This allows the required check to pass.
+
+		if subField.Type().Kind() != reflect.Bool && lup != nil {
+			if !isZero(subField) && isZeroStr(v) {
+				v = fmt.Sprintf("%v", subField)
+				lup.Value.Set(v)
+				fmt.Printf("%+v\n", c.cfg)
+				fmt.Printf("subField: %+v\n", subField)
+				fmt.Printf("lup: %+v\n", lup)
+				fmt.Printf("v: %+v\n", v)
+				v2, _ := c.Cmd.PersistentFlags().GetInt(strings.ToLower(str))
+				fmt.Printf("v2: %+v\n", v2)
+				fmt.Println()
+				fmt.Println()
+
+			}
+
+			// AHHHHHHHHHHHHHH. This line next line took forever.
+			// Don't "reset" the default value if it's been specified differently.
+			if lup.DefValue == v && isZeroStr(v) && !isZero(subField) {
+				fmt.Printf("%+v\n", c.cfg)
+				fmt.Printf("subField: %+v\n", subField)
+				fmt.Printf("lup: %+v\n", lup)
+				fmt.Printf("v: %+v\n", v)
+				v2, _ := c.Cmd.PersistentFlags().GetInt(strings.ToLower(str))
+				fmt.Printf("v2: %+v\n", v2)
+				fmt.Println()
+				fmt.Println()
+				return nil
+			}
+		}
+
 		// asdf
 		if len(str) != 0 && subField.CanSet() {
 			switch subField.Type().Kind() {
@@ -135,9 +182,6 @@ func (c *Config) getCfg(gCfg interface{}) error {
 				}
 				subField.SetInt(v)
 			case reflect.String:
-				v, _ := c.Cmd.PersistentFlags().GetString(strings.ToLower(str))
-				lup := c.Cmd.PersistentFlags().Lookup(strings.ToLower(str))
-
 				// If the struct has a value filled in that wasn't provided
 				// as a flag, then set it as the flag value.
 				// This allows the required check to pass.
@@ -151,6 +195,7 @@ func (c *Config) getCfg(gCfg interface{}) error {
 				if lup != nil && lup.DefValue == v && v != "" && subField.String() != "" {
 					return nil
 				}
+
 				v = c.Viper.GetString(str)
 				if len(v) == 0 {
 					return nil
@@ -203,13 +248,25 @@ func (c *Config) setupEnvAndFlags(gCfg interface{}) error {
 		case reflect.Bool:
 			c.Cmd.PersistentFlags().Bool(flagStr, false, desc)
 		case reflect.Int:
-			c.Cmd.PersistentFlags().Int(flagStr, 0, desc)
+			var def int
+			if b, err := strconv.ParseInt(_def, 10, 32); err == nil {
+				def = int(b)
+			}
+			c.Cmd.PersistentFlags().Int(flagStr, def, desc)
 		case reflect.Int64:
-			c.Cmd.PersistentFlags().Int64(flagStr, 0, desc)
+			var def int64
+			if b, err := strconv.ParseInt(_def, 10, 64); err == nil {
+				def = b
+			}
+			c.Cmd.PersistentFlags().Int64(flagStr, def, desc)
 		case reflect.String:
 			c.Cmd.PersistentFlags().String(flagStr, _def, desc)
 		case reflect.Float64:
-			c.Cmd.PersistentFlags().Float64(flagStr, 0.0, desc)
+			var def float64
+			if b, err := strconv.ParseFloat(_def, 64); err == nil {
+				def = b
+			}
+			c.Cmd.PersistentFlags().Float64(flagStr, def, desc)
 		case reflect.Slice:
 			def := strings.Split(_def, ",")
 			if len(def[0]) == 0 {
