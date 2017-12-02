@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,9 +18,11 @@ type Config struct {
 	Cmd            *cobra.Command
 }
 
+//
+
 // New creates a config parser using a provided cfg struct.
 // name, desc are for the help window.
-func New(name string, desc string, cfg interface{}) (*Config, error) {
+func New(name string, desc string, cfg interface{}) *Config {
 	return NewWithCommand(
 		&cobra.Command{
 			Use:  name,
@@ -31,25 +32,25 @@ func New(name string, desc string, cfg interface{}) (*Config, error) {
 }
 
 // NewWithCommand creates the config parser using an existing cobra command.
-func NewWithCommand(cmd *cobra.Command, cfg interface{}) (*Config, error) {
+func NewWithCommand(cmd *cobra.Command, cfg interface{}) *Config {
 	c := &Config{
 		Viper: viper.New(),
 		Cmd:   cmd,
 		cfg:   cfg,
 	}
 	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
-		return checkRequiredFlags(cmd.Flags())
+		return c.checkRequiredFlags(cmd.Flags())
 	}
 
 	c.Cmd.PersistentFlags().String("config", "", "The configuration file")
 	c.Viper.BindPFlag("config", c.Cmd.PersistentFlags().Lookup("config"))
 
-	return c, c.setupEnvAndFlags(c.cfg)
-
+	return c
 }
 
 // Execute runs the command (if provided) and populates the config struct.
 func (c *Config) Execute() (interface{}, error) {
+	c.setupEnvAndFlags(c.cfg)
 	c.Cmd.Flags().Visit(func(arg0 *pflag.Flag) {
 		if arg0.Name == "help" {
 			os.Exit(0)
@@ -57,29 +58,42 @@ func (c *Config) Execute() (interface{}, error) {
 	})
 	_, flags, _ := c.Cmd.Find(os.Args[1:])
 	c.Cmd.ParseFlags(flags)
-
 	configFile := c.Viper.GetString("config")
 	if configFile != "" {
-		if _, err := os.Stat(configFile); err == nil {
-			c.Viper.SetConfigFile(configFile) // name of config file
-			err := c.Viper.ReadInConfig()     // Find and read the config file
-			if err != nil {                   // Handle errors reading the config file
-				return nil, err
-			}
-			err = c.Viper.Unmarshal(c.cfg)
-			if err != nil { // Handle errors reading the config file
-				return nil, err
-			}
+		_, err := os.Stat(configFile)
+		if err != nil {
+			return nil, err
+		}
+		c.Viper.SetConfigFile(configFile) // name of config file
+		// Find and read the config file
+		if err = c.Viper.ReadInConfig(); err != nil { // Handle errors reading the config file
+			return nil, err
+		}
+		if err = c.Viper.Unmarshal(c.cfg); err != nil { // Handle errors reading the config file
+			return nil, err
 		}
 	}
 	var err error
 	if err = c.getCfg(c.cfg); err != nil {
 		return c.cfg, err
 	}
+	return c.cfg, c.Cmd.Execute()
+}
 
-	err = c.Cmd.Execute()
+// SilenceUsage will not print the help screen on error.
+func (c *Config) SilenceUsage() {
+	c.Cmd.SilenceUsage = true
+}
 
-	return c.cfg, err
+// SilenceUsage will not print errors found during parse/load.
+func (c *Config) SilenceErrors() {
+	c.Cmd.SilenceErrors = true
+}
+
+// Reset flags/command to reuse.
+func (c *Config) Reset() {
+	c.Cmd.ResetCommands()
+	c.Cmd.ResetFlags()
 }
 
 /* NOTE: Due to a bug in Viper, all boolean flags MUST DEFAULT TO FALSE.
@@ -96,13 +110,13 @@ func (c *Config) getCfg(gCfg interface{}) error {
 		// eachSubField only calls this function if  subFieldName exists
 		// and can be set
 		subField := parent.FieldByName(subFieldName)
-
 		str := ""
 		if v := c.Viper.Get(envStr); v != nil {
 			str = envStr
 		} else if c.Viper.Get(flagStr) != nil {
 			str = flagStr
 		}
+		// asdf
 		if len(str) != 0 && subField.CanSet() {
 			switch subField.Type().Kind() {
 			case reflect.Bool:
@@ -121,7 +135,23 @@ func (c *Config) getCfg(gCfg interface{}) error {
 				}
 				subField.SetInt(v)
 			case reflect.String:
-				v := c.Viper.GetString(str)
+				v, _ := c.Cmd.PersistentFlags().GetString(strings.ToLower(str))
+				lup := c.Cmd.PersistentFlags().Lookup(strings.ToLower(str))
+
+				// If the struct has a value filled in that wasn't provided
+				// as a flag, then set it as the flag value.
+				// This allows the required check to pass.
+				if lup != nil && subField.String() != "" && v == "" {
+					lup.Value.Set(subField.String())
+					return nil
+				}
+
+				// AHHHHHHHHHHHHHH. This line next line took forever.
+				// Don't "reset" the default value if it's been specified differently.
+				if lup != nil && lup.DefValue == v && v != "" && subField.String() != "" {
+					return nil
+				}
+				v = c.Viper.GetString(str)
 				if len(v) == 0 {
 					return nil
 				}
@@ -152,7 +182,6 @@ func (c *Config) setupEnvAndFlags(gCfg interface{}) error {
 	c.Viper.AutomaticEnv()
 	c.Viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	c.Viper.SetEnvPrefix(c.Cmd.Name())
-
 	return eachSubField(gCfg, func(parent reflect.Value, subFieldName string, crumbs []string) error {
 		p := strings.Join(crumbs, "")
 		envStr := envString(p, subFieldName)
@@ -162,35 +191,25 @@ func (c *Config) setupEnvAndFlags(gCfg interface{}) error {
 		subField, _ := parent.Type().FieldByName(subFieldName)
 
 		desc := subField.Tag.Get("desc")
+		if desc == "" {
+			desc = subField.Tag.Get("description")
+		}
 		_def := subField.Tag.Get("def")
+		if _def == "" {
+			_def = subField.Tag.Get("default")
+		}
 		_, req := subField.Tag.Lookup("required")
 		switch subField.Type.Kind() {
 		case reflect.Bool:
-			def := false
-			if b, err := strconv.ParseBool(_def); err != nil {
-				def = b
-			}
-			c.Cmd.PersistentFlags().Bool(flagStr, def, desc)
+			c.Cmd.PersistentFlags().Bool(flagStr, false, desc)
 		case reflect.Int:
-			var def int
-			if b, err := strconv.ParseInt(_def, 10, 32); err != nil {
-				def = int(b)
-			}
-			c.Cmd.PersistentFlags().Int(flagStr, def, desc)
+			c.Cmd.PersistentFlags().Int(flagStr, 0, desc)
 		case reflect.Int64:
-			var def int64
-			if b, err := strconv.ParseInt(_def, 10, 64); err != nil {
-				def = b
-			}
-			c.Cmd.PersistentFlags().Int64(flagStr, def, desc)
+			c.Cmd.PersistentFlags().Int64(flagStr, 0, desc)
 		case reflect.String:
 			c.Cmd.PersistentFlags().String(flagStr, _def, desc)
 		case reflect.Float64:
-			var def float64
-			if b, err := strconv.ParseFloat(_def, 64); err != nil {
-				def = b
-			}
-			c.Cmd.PersistentFlags().Float64(flagStr, def, desc)
+			c.Cmd.PersistentFlags().Float64(flagStr, 0.0, desc)
 		case reflect.Slice:
 			def := strings.Split(_def, ",")
 			if len(def[0]) == 0 {
@@ -209,6 +228,7 @@ func (c *Config) setupEnvAndFlags(gCfg interface{}) error {
 		c.Viper.BindPFlag(flagStr, c.Cmd.PersistentFlags().Lookup(flagStr))
 		return nil
 	})
+
 }
 
 // eachSubField is used for a struct of structs (like GlobalConfig). fn is called
@@ -244,7 +264,7 @@ func eachSubField(i interface{}, fn func(reflect.Value, string, []string) error,
 	return nil
 }
 
-func checkRequiredFlags(flags *pflag.FlagSet) error {
+func (c *Config) checkRequiredFlags(flags *pflag.FlagSet) error {
 	requiredError := false
 	flagName := ""
 
@@ -255,16 +275,17 @@ func checkRequiredFlags(flags *pflag.FlagSet) error {
 		}
 
 		flagRequired := requiredAnnotation[0] == "true"
+		val := c.Viper.Get(flag.Name)
 
-		if flagRequired && !flag.Changed {
+		if flagRequired && (!flag.Changed && isZero(val)) {
+			//fmt.Printf("%v %v %+v\n", val, flag.Name, c.cfg)
 			requiredError = true
 			flagName = flag.Name
 		}
 	})
 
 	if requiredError {
-		fmt.Println("Required flag `" + flagName + "` has not been set")
-		os.Exit(0)
+		return fmt.Errorf("Required flag `%s` has not been set", flagName)
 	}
 
 	return nil

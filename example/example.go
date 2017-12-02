@@ -13,17 +13,13 @@ type Conf struct {
 	Log      LogConf
 }
 type LogConf struct {
-	Level string `desc:"error,info,debug" def:"info"`
+	Level string `desc:"error,info,debug" def:"info" required:"true"`
 	FD    int    `desc:"unix File Descriptor number"`
 }
 
 func main() {
 	cfg := Conf{}
-	c, err := config.New("configTest", "A Thingy To Run Commands", &cfg)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	c := config.New("configTest", "A Thingy To Run Commands", &cfg)
 
 	conf, err := c.Execute()
 	if err != nil {

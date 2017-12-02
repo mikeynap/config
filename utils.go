@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"reflect"
+	"strings"
+)
 
 func flagString(parent, field string) string {
 	if len(parent) == 0 {
@@ -72,4 +75,12 @@ func contains(s []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func isZero(x interface{}) bool {
+	return reflect.DeepEqual(x, reflect.Zero(reflect.TypeOf(x)).Interface())
+}
+
+func isZeroStr(x string) bool {
+	return x == "" || x == "0" || x == "0.0" || x == "[]"
 }

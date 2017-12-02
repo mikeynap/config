@@ -1,7 +1,7 @@
 Name: mikey
 Log:
-  Level: info
+  Level: error
 Ports:
-  - 21
+  - 22
   - 8080
   - 9999

@@ -60,13 +60,8 @@ var cfg Config
 func main() {
 	cfg = Config{}
 	Cmd.AddCommand(VersionCmd)
-	c, err := config.NewWithCommand(Cmd, &cfg)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	_, err = c.Execute() // cfgInterface === cfg
+	c := config.NewWithCommand(Cmd, &cfg)
+	_, err := c.Execute() // cfgInterface === cfg
 	if err != nil {
 		fmt.Println(err)
 		return
