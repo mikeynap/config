@@ -19,6 +19,7 @@ type Config struct {
 	cfg            interface{}
 	Cmd            *cobra.Command
 	parsed         bool
+	Args           []string
 }
 
 /* New creates a config parser using a provided cfg struct.
@@ -50,14 +51,20 @@ func NewWithCommand(cmd *cobra.Command, cfg interface{}) *Config {
 	cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
 		return c.checkRequiredFlags(cmd.Flags())
 	}
-
 	c.Cmd.PersistentFlags().String("config", "", "The configuration file")
 	c.Viper.BindPFlag("config", c.Cmd.PersistentFlags().Lookup("config"))
 
 	return c
 }
 
-func (c *Config) Parse() (interface{}, error) {
+// SetArgs sets args to use instead of the default os.Args (useful for testing).
+// This is used instead of cobraCommand.SetArgs()
+func (c *Config) SetArgs(args []string) {
+	c.Args = args
+}
+
+// do pre-execute parsing of config file.
+func (c *Config) parse() (interface{}, error) {
 	defer func() { c.parsed = true }()
 	if c.parsed {
 		c.Reset()
@@ -68,7 +75,11 @@ func (c *Config) Parse() (interface{}, error) {
 			os.Exit(0)
 		}
 	})
-	_, flags, _ := c.Cmd.Find(os.Args[1:])
+
+	if len(os.Args) > 1 && len(c.Args) == 0 {
+		c.Args = os.Args[1:]
+	}
+	_, flags, _ := c.Cmd.Find(c.Args)
 	c.Cmd.ParseFlags(flags)
 	configFile := c.Viper.GetString("config")
 	if configFile != "" {
@@ -92,9 +103,14 @@ func (c *Config) Parse() (interface{}, error) {
 	return c.cfg, nil
 }
 
+// Parse is an alias for Execute().
+func (c *Config) Parse() (interface{}, error) {
+	return c.Execute()
+}
+
 // Execute runs the command (if provided) and populates the config struct.
 func (c *Config) Execute() (interface{}, error) {
-	cfg, err := c.Parse()
+	cfg, err := c.parse()
 	if err != nil {
 		return cfg, err
 	}
@@ -115,6 +131,9 @@ func (c *Config) SilenceErrors() {
 func (c *Config) Reset() {
 	c.Cmd.ResetCommands()
 	c.Cmd.ResetFlags()
+	c.Args = nil
+	c.Cmd.PersistentFlags().String("config", "", "The configuration file")
+	c.Viper.BindPFlag("config", c.Cmd.PersistentFlags().Lookup("config"))
 }
 
 /* NOTE: Due to a bug in Viper, all boolean flags MUST DEFAULT TO FALSE.

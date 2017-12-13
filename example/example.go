@@ -22,12 +22,13 @@ func main() {
 	cfg := Conf{}
 	c := config.New("configTest", "A Thingy To Run Commands", &cfg)
 
-	conf, err := c.Parse()
+	conf, err := c.Execute()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	conf, err = c.Parse()
+	c.SetArgs([]string{"--required", "true", "--log-level", "error"})
+	conf, err = c.Execute()
 	if err != nil {
 		fmt.Println(err)
 		return

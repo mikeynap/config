@@ -308,13 +308,14 @@ func TestConfig(t *testing.T) {
 			c = NewWithCommand(cmd, &cfg2)
 		} else {
 			c = NewWithCommand(cmd, &cfg)
-
 		}
+
 		if _, err := c.Execute(); err == nil && !tc.shouldPass {
 			t.Errorf("Test %d) Should have errored.", ti)
 		} else if err != nil && tc.shouldPass {
 			t.Errorf("Test %d) Shouldn't have errored: %v", ti, err)
 		}
+		os.Args = os.Args[:1]
 		var res interface{}
 		var dacfg interface{}
 		if tc.expectedRes != nil {
@@ -529,6 +530,31 @@ func TestEnvString(t *testing.T) {
 			t.Errorf("Expected %s, got %s", test.expected, flagString(test.parent, test.field))
 		}
 	}
+}
+
+func TestCmdArgs(t *testing.T) {
+	cobCmd := &cobra.Command{
+		Use:           "test",
+		Long:          "test desc",
+		Run:           func(cmd *cobra.Command, args []string) {},
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	type s struct {
+		Test  bool
+		Test2 bool
+	}
+	cfg := s{}
+	c := NewWithCommand(cobCmd, &cfg)
+	c.SetArgs([]string{"--test", "true"})
+	_, err := c.Execute()
+	if err != nil {
+		t.Error("Error Executing with cmdArgs: ", err)
+	}
+	if !cfg.Test {
+		t.Error("test should be true.")
+	}
+
 }
 
 func withStrings(s *TestStruct) *TestStruct {
