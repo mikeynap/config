@@ -11,6 +11,7 @@ type Conf struct {
 	Ports    []string `desc:"Comma Seperated list of ... ports" def:"21,23,999"`
 	Required string   `required:"true"`
 	Log      LogConf
+	PathMap  string `mapstructure:"path_map"`
 }
 type LogConf struct {
 	Level string `desc:"error,info,debug" def:"info" required:"true"`
@@ -21,11 +22,17 @@ func main() {
 	cfg := Conf{}
 	c := config.New("configTest", "A Thingy To Run Commands", &cfg)
 
-	conf, err := c.Execute()
+	conf, err := c.Parse()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	conf, err = c.Parse()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	fmt.Printf("%+v\n", conf)
 
 }

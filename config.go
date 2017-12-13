@@ -18,6 +18,7 @@ type Config struct {
 	configLocation string
 	cfg            interface{}
 	Cmd            *cobra.Command
+	parsed         bool
 }
 
 /* New creates a config parser using a provided cfg struct.
@@ -56,8 +57,11 @@ func NewWithCommand(cmd *cobra.Command, cfg interface{}) *Config {
 	return c
 }
 
-// Execute runs the command (if provided) and populates the config struct.
-func (c *Config) Execute() (interface{}, error) {
+func (c *Config) Parse() (interface{}, error) {
+	defer func() { c.parsed = true }()
+	if c.parsed {
+		c.Reset()
+	}
 	c.setupEnvAndFlags(c.cfg)
 	c.Cmd.Flags().Visit(func(arg0 *pflag.Flag) {
 		if arg0.Name == "help" {
@@ -84,6 +88,15 @@ func (c *Config) Execute() (interface{}, error) {
 	var err error
 	if err = c.getCfg(c.cfg); err != nil {
 		return c.cfg, err
+	}
+	return c.cfg, nil
+}
+
+// Execute runs the command (if provided) and populates the config struct.
+func (c *Config) Execute() (interface{}, error) {
+	cfg, err := c.Parse()
+	if err != nil {
+		return cfg, err
 	}
 	return c.cfg, c.Cmd.Execute()
 }
