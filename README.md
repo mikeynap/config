@@ -1,6 +1,9 @@
 # Config
 Create command line/environment arguments from a go struct (with usage/help). Those arguments then get stored in said struct.
 
+# Docs:
+https://godoc.org/github.com/mikeynap/config
+
 ```
 // desc tag is used for --help screen.
 // desc/default/required are optional tags.
