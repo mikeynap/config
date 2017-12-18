@@ -15,7 +15,7 @@ type Conf struct {
 }
 type LogConf struct {
 	Level string `desc:"error,info,debug" def:"info" required:"true"`
-	FD    int    `desc:"unix File Descriptor number"`
+	FD    int    `desc:"unix File Descriptor number" default:"99"`
 }
 
 func main() {

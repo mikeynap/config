@@ -495,7 +495,7 @@ func TestFlagString(t *testing.T) {
 		{"Docker", "Foo", "docker-foo"},
 		{"Foo", "Bar", "foo-bar"},
 		{"FOO", "FooBAR", "foo-foo-bar"},
-		{"FoOo", "FooBARBaZ", "fo-oo-foo-bar-baz"},
+		{"FoOo", "FooBARBaZ", "fo-oo-foo-bar-ba-z"},
 		{"FOO", "FOoBARBaZa", "foo-f-oo-bar-ba-za"},
 		{"", "bar", "bar"},
 		{"bar", "", "bar"},
@@ -504,7 +504,7 @@ func TestFlagString(t *testing.T) {
 
 	for _, test := range tests {
 		if flagString(test.parent, test.field) != test.expected {
-			t.Errorf("Expected %s, got %s", test.expected, flagString(test.parent, test.field))
+			t.Errorf("Str %s%s: Expected %s, got %s", test.parent, test.field, test.expected, flagString(test.parent, test.field))
 		}
 	}
 }
@@ -518,7 +518,7 @@ func TestEnvString(t *testing.T) {
 		{"Docker", "Foo", "DOCKER_FOO"},
 		{"Foo", "Bar", "FOO_BAR"},
 		{"FOO", "FooBAR", "FOO_FOO_BAR"},
-		{"FoOo", "FooBARBaZ", "FO_OO_FOO_BAR_BAZ"},
+		{"FoOo", "FooBARBaZ", "FO_OO_FOO_BAR_BA_Z"},
 		{"FOO", "FOoBARBaZa", "FOO_F_OO_BAR_BA_ZA"},
 		{"", "bar", "BAR"},
 		{"bar", "", "BAR"},
@@ -527,7 +527,7 @@ func TestEnvString(t *testing.T) {
 
 	for _, test := range tests {
 		if envString(test.parent, test.field) != test.expected {
-			t.Errorf("Expected %s, got %s", test.expected, flagString(test.parent, test.field))
+			t.Errorf("Expected %s, got %s", test.expected, envString(test.parent, test.field))
 		}
 	}
 }
@@ -554,7 +554,39 @@ func TestCmdArgs(t *testing.T) {
 	if !cfg.Test {
 		t.Error("test should be true.")
 	}
+}
 
+func TestSplitCamel(t *testing.T) {
+	cases := map[string]string{
+		"Test":         "test",
+		"TestThing":    "test-thing",
+		"TestThingT":   "test-thing-t",
+		"TestURLStuff": "test-url-stuff",
+		"TestURL":      "test-url",
+		"TestUrls":     "test-urls",
+		"TesturLs":     "testur-ls",
+		"TestURLs":     "test-urls",
+		"TestURLS":     "test-urls",
+		"aURLTest":     "a-url-test",
+		"S":            "s",
+		"s":            "s",
+		"aS":           "a-s",
+		"Sa":           "sa",
+		"as":           "as",
+		"lowerUpper":   "lower-upper",
+		"FOO":          "foo",
+		"foo":          "foo",
+		"":             "",
+		"tEsTiNg":      "t-es-ti-ng",
+		"TeStInG":      "te-st-in-g",
+		"TeStINg":      "te-st-ing",
+	}
+	for test, exp := range cases {
+		res := splitCamel(test, '-')
+		if strings.ToLower(res) != exp {
+			t.Errorf("Splitting %s should have given %s, got %s", test, exp, res)
+		}
+	}
 }
 
 func withStrings(s *TestStruct) *TestStruct {
@@ -590,6 +622,5 @@ func withStringsSlice(s []string) []string {
 	if !contains(s, "--sub-sub-sub-rint") {
 		s = append(s, "--sub-sub-sub-rint", "2")
 	}
-
 	return s
 }
