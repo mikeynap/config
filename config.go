@@ -43,6 +43,10 @@ func New(name string, desc string, cfg interface{}) *Config {
 
 // NewWithCommand creates the config parser using an existing cobra command.
 func NewWithCommand(cmd *cobra.Command, cfg interface{}) *Config {
+	// To avoid panics vvv
+	cmd.ResetFlags()
+	cmd.ResetCommands()
+
 	c := &Config{
 		Viper: viper.New(),
 		Cmd:   cmd,
@@ -131,6 +135,7 @@ func (c *Config) SilenceErrors() {
 func (c *Config) Reset() {
 	c.Cmd.ResetCommands()
 	c.Cmd.ResetFlags()
+	c.Viper = viper.New()
 	c.Args = nil
 	c.Cmd.PersistentFlags().String("config", "", "The configuration file")
 	c.Viper.BindPFlag("config", c.Cmd.PersistentFlags().Lookup("config"))
